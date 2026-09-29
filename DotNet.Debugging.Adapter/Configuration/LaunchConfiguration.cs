@@ -19,6 +19,8 @@ public class LaunchConfiguration : BaseConfiguration {
     public CoreClrMobileDebuggerOptions? MobileOptions { get; }
     public string? RemoteHostDirectory { get; }
     public string? RemoteTargetDirectory { get; }
+    public string RuntimeFlavor { get; private set; }
+    public PipeTransportOptions? PipeTransport { get; }
 
     public LaunchConfiguration(Dictionary<string, JToken> properties) : base(properties) {
         Program = properties.TryGetValue("program").ToClass<string>().ToPlatformPath();
@@ -32,6 +34,13 @@ public class LaunchConfiguration : BaseConfiguration {
         MobileOptions = properties.TryGetValue("coreClrMobileDebuggerOptions").ToClass<CoreClrMobileDebuggerOptions>();
         RemoteHostDirectory = properties.TryGetValue("remoteCoreclrHost").ToClass<string>().ToPlatformPath();
         RemoteTargetDirectory = properties.TryGetValue("remoteCoreclrTarget").ToClass<string>().ToPlatformPath();
+        PipeTransport = properties.TryGetValue("pipeTransport").ToClass<PipeTransportOptions>();
+
+        var type = properties.TryGetValue("type").ToClass<string>();
+        var flavor = properties.TryGetValue("runtimeFlavor").ToClass<string>();
+        if (string.IsNullOrEmpty(flavor) && string.Equals(type, "clr", StringComparison.OrdinalIgnoreCase))
+            flavor = "desktopclr";
+        RuntimeFlavor = flavor ?? "coreclr";
 
         if (string.IsNullOrEmpty(WorkingDirectory))
             WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(Program));
@@ -86,6 +95,7 @@ public class LaunchConfiguration : BaseConfiguration {
             info.Program = "dotnet";
         }
 
+        info.RuntimeFlavor = RuntimeFlavor;
         return info;
     }
 

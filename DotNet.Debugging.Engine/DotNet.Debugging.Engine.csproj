@@ -8,6 +8,15 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="ICSharpCode.Decompiler" />
+		<PackageReference Include="Krafs.Publicizer">
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		  <PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Publicize IncludeCompilerGeneratedMembers="false" Include="ICSharpCode.Decompiler" MemberPattern="^ICSharpCode\.Decompiler\.(CSharp\.Transforms\.RemoveEmbeddedAttributes|DebugInfo)\..*" />
 		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
 		<PackageReference Include="Microsoft.Diagnostics.NETCore.Client" />
 		<PackageReference Include="Microsoft.Diagnostics.DbgShim" />

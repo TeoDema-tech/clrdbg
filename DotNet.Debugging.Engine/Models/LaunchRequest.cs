@@ -11,6 +11,9 @@ public class LaunchRequest {
     public ConsoleType Console { get; set; }
     // Set by the 'OnTerminalLaunchRequested' subscriber: the id of the process it started in the terminal
     public int? ProcessId { get; set; }
+    // Target runtime flavor: "coreclr" or "desktopclr" (.NET Framework 4.x)
+    public string? RuntimeFlavor { get; set; }
+    public bool IsDesktopClr => string.Equals(RuntimeFlavor, "desktopclr", StringComparison.OrdinalIgnoreCase);
 
     public LaunchRequest(string program) {
         Program = program;

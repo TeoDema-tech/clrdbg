@@ -1,3 +1,4 @@
+using DotNet.Debugging.Engine.Decompilation;
 using Microsoft.VisualStudio.Shared.VSCodeDebugProtocol;
 using Microsoft.VisualStudio.Shared.VSCodeDebugProtocol.Messages;
 
@@ -7,7 +8,10 @@ public partial class DebugSession {
     protected override SourceResponse HandleSourceRequest(SourceArguments arguments) {
         return Invoke(() => {
             var sourceReference = arguments.Source?.SourceReference ?? arguments.SourceReference;
-            var content = sourceLinkResolver.GetSourceContent(sourceReference);
+            var content = sourceLinkResolver?.GetSourceContent(sourceReference);
+            if (content == null && arguments.Source?.Path != null) {
+                content = DecompilationService.TryGetSourceContent(arguments.Source.Path);
+            }
             if (content == null)
                 throw new ProtocolException("No source available");
 

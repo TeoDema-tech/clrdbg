@@ -9,6 +9,8 @@ using Microsoft.VisualStudio.Shared.VSCodeDebugProtocol.Messages;
 using Breakpoint = DotNet.Debugging.Engine.Models.Breakpoint;
 using LaunchRequest = DotNet.Debugging.Engine.Models.LaunchRequest;
 
+using DotNet.Debugging.Engine.Decompilation;
+
 namespace DotNet.Debugging.Adapter;
 
 public partial class DebugSession : Session {
@@ -17,10 +19,11 @@ public partial class DebugSession : Session {
     private readonly ExceptionFilterOptions allExceptionsFilter = new ExceptionFilterOptions();
     private readonly ExceptionFilterOptions userUnhandledExceptionsFilter = new ExceptionFilterOptions();
     private readonly ManagedDebugger session;
+    private readonly DecompilationService decompilationService = new DecompilationService();
 
     private IDebugAgent debugAgent = null!;
-    private SourceLinkResolver sourceLinkResolver = null!;
-    private SourceFileMapper sourceFileMapper = null!;
+    private SourceLinkResolver sourceLinkResolver = new SourceLinkResolver(new Dictionary<string, SourceLinkOptions>());
+    private SourceFileMapper sourceFileMapper = new SourceFileMapper(new Dictionary<string, string>());
     private SymbolsResolver symbolsResolver = null!;
 
     public DebugSession(Stream input, Stream output) : base(input, output) {
@@ -91,9 +94,13 @@ public partial class DebugSession : Session {
         Protocol.SendEvent(new ThreadEvent(ThreadEvent.ReasonValue.Exited, threadId));
     }
     private void SymbolsRequested(SymbolsRequest request) {
-        if (symbolsResolver.HasSymbolServers)
+        if (symbolsResolver?.HasSymbolServers == true)
             OnDebugDataReceived(string.Format(Resources.MsgPdbSearching, request.SymbolFileName));
-        request.SymbolFilePath = symbolsResolver.FindSymbols(request.SymbolFileName, request.PdbGuid);
+        request.SymbolFilePath = symbolsResolver?.FindSymbols(request.SymbolFileName, request.PdbGuid);
+        if (string.IsNullOrEmpty(request.SymbolFilePath) && !string.IsNullOrEmpty(request.ModulePath)) {
+            var allModulePaths = session.Modules.Select(m => m.Path).Where(p => !string.IsNullOrEmpty(p));
+            request.SymbolFilePath = decompilationService.GetOrGeneratePdb(request.ModulePath, allModulePaths);
+        }
     }
     private void AssemblyLoaded(ModuleInfo module) {
         var justMyCode = debugAgent.Configuration.JustMyCode;

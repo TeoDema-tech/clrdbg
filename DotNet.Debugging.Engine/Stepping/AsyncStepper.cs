@@ -194,7 +194,7 @@ internal class AsyncStepper {
     }
     private bool SetupNotifyDebuggerBreakpoint() {
         try {
-            var coreLib = debugger.Modules.FirstOrDefault(it => it.Name == ManagedDebugger.CoreLibraryName);
+            var coreLib = debugger.Modules.FirstOrDefault(it => it.Name == ManagedDebugger.CoreLibraryName || string.Equals(it.Name, "mscorlib.dll", StringComparison.OrdinalIgnoreCase));
             if (coreLib == null)
                 return false;
 

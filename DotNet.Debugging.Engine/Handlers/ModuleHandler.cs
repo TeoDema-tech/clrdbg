@@ -55,8 +55,8 @@ public partial class ManagedDebugger {
         ModulesVersion++;
 
         TrySetEntryPointBreakpoint(module);
-        // The expression evaluator needs the core library's primitive types, every stop happens after it is loaded
-        if (module.Name == CoreLibraryName)
+        // The expression evaluator needs the core library's primitive types (System.Private.CoreLib for CoreCLR, mscorlib for Desktop CLR)
+        if (module.Name == CoreLibraryName || string.Equals(module.Name, "mscorlib.dll", StringComparison.OrdinalIgnoreCase))
             evaluator = new ExpressionEvaluator(this, PrimitiveTypeClasses.Load(module.Module));
 
         OnModuleLoaded?.Invoke(module);

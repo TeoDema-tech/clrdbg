@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Text;
 using System.Threading.Channels;
 using DotNet.Debugging.CorApi;
 using DotNet.Debugging.CorApi.Extensions;
@@ -66,7 +68,7 @@ public partial class ManagedDebugger {
     public int ProcessId { get; private set; }
 
     internal FuncEvalRunner FuncEval { get; }
-    internal IReadOnlyCollection<ModuleInfo> Modules => modules.Values;
+    public IReadOnlyCollection<ModuleInfo> Modules => modules.Values;
     // Incremented whenever a module is loaded or its metadata changes, so everything derived from the module set can detect staleness
     internal int ModulesVersion { get; private set; }
     internal bool IsEvaluating => FuncEval.IsRunning;
@@ -127,15 +129,28 @@ public partial class ManagedDebugger {
     // The debuggee runs from the moment it is started, so the host starts it once the breakpoints are set:
     // a client sends them only after its launch or attach request and expects them bound from the first line
     public async Task LaunchAsync(LaunchRequest launchRequest) {
-        DebuggerLoggingService.LogMessage($"Launching program: {launchRequest.Program} {string.Join(' ', launchRequest.Arguments)}");
+        DebuggerLoggingService.LogMessage($"Launching program: {launchRequest.Program} {string.Join(' ', launchRequest.Arguments)} (RuntimeFlavor: {launchRequest.RuntimeFlavor ?? "coreclr"})");
         EnsureNotStarted();
+        if (launchRequest.IsDesktopClr) {
+            if (!OperatingSystem.IsWindows())
+                throw new PlatformNotSupportedException(".NET Framework (Desktop CLR) debugging is only supported on Windows.");
+            await LaunchDesktopClrProcessAsync(launchRequest);
+            return;
+        }
+
         if (launchRequest.Console == ConsoleType.InternalConsole)
             await LaunchProcessAsync(launchRequest);
         else
             await LaunchInTerminalAsync(launchRequest);
     }
-    public async Task AttachAsync(int processId) {
+    public async Task AttachAsync(int processId, bool isDesktopClr = false) {
         EnsureNotStarted();
+        if (isDesktopClr) {
+            if (!OperatingSystem.IsWindows())
+                throw new PlatformNotSupportedException(".NET Framework (Desktop CLR) debugging is only supported on Windows.");
+            await AttachDesktopClrToProcessAsync(processId);
+            return;
+        }
         await AttachToProcessAsync(processId, launchRequest: null);
     }
     // The transport is set up first, 'onListenerReady' then lets the host launch the on-device app so it can connect back,
@@ -599,6 +614,98 @@ public partial class ManagedDebugger {
         target.SetManagedHandler(callbacks);
         corDebug = target;
         process = target.DebugActiveProcess(processId, false);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private async Task LaunchDesktopClrProcessAsync(LaunchRequest launchRequest) {
+        var program = launchRequest.Program;
+        var workingDirectory = launchRequest.WorkingDirectory ?? Path.GetDirectoryName(program) ?? Environment.CurrentDirectory;
+
+        var cmdLine = new StringBuilder();
+        cmdLine.Append('"').Append(program).Append('"');
+        foreach (var arg in launchRequest.Arguments) {
+            cmdLine.Append(' ').Append('"').Append(arg.Replace("\"", "\\\"")).Append('"');
+        }
+
+        DebuggerLoggingService.LogMessage($"Creating Desktop CLR process for launch: {cmdLine}");
+
+        var targetCorDebug = ClrMetaHostBootstrap.CreateDesktopCorDebug(program);
+        targetCorDebug.Initialize();
+        targetCorDebug.SetManagedHandler(callbacks);
+
+        corDebug = targetCorDebug;
+
+        var result = CallTryCreateProcess(
+            targetCorDebug,
+            program,
+            cmdLine.ToString(),
+            workingDirectory,
+            out var spawnedProcess,
+            out var processInfo);
+        Marshal.ThrowExceptionForHR(result);
+
+        if (spawnedProcess == null)
+            throw new InvalidOperationException("Desktop CLR process creation failed to yield an ICorDebugProcess instance.");
+
+        process = spawnedProcess;
+        ProcessId = (int)processInfo.dwProcessId;
+
+        // Release Win32 handles captured in processInfo
+        if (processInfo.hProcess != IntPtr.Zero)
+            Win32NativeMethods.CloseHandle(processInfo.hProcess);
+        if (processInfo.hThread != IntPtr.Zero)
+            Win32NativeMethods.CloseHandle(processInfo.hThread);
+
+        stopAtEntryPending = launchRequest.StopAtEntry;
+        DebuggerLoggingService.LogMessage($"Successfully attached to Desktop CLR process with PID: {ProcessId}");
+        OnProcessStarted?.Invoke(ProcessId);
+        await Task.CompletedTask;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private async Task AttachDesktopClrToProcessAsync(int processId) {
+        DebuggerLoggingService.LogMessage($"Attaching to Desktop CLR process: {processId}");
+
+        var targetCorDebug = ClrMetaHostBootstrap.AttachToDesktopClr(processId);
+        targetCorDebug.Initialize();
+        targetCorDebug.SetManagedHandler(callbacks);
+
+        corDebug = targetCorDebug;
+        process = targetCorDebug.DebugActiveProcess(processId, false);
+        ProcessId = processId;
+
+        DebuggerLoggingService.LogMessage($"Successfully attached to Desktop CLR process with PID: {processId}");
+        await Task.CompletedTask;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static unsafe int CallTryCreateProcess(
+        ICorDebug targetCorDebug,
+        string program,
+        string cmdLine,
+        string workingDirectory,
+        out ICorDebugProcess? spawnedProcess,
+        out ProcessInformation processInfo) {
+        var startupInfo = new StartupInfoW {
+            cb = sizeof(StartupInfoW)
+        };
+        processInfo = default;
+
+        fixed (ProcessInformation* pProcessInfo = &processInfo) {
+            return targetCorDebug.TryCreateProcess(
+                program,
+                cmdLine,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                false,
+                0,
+                IntPtr.Zero,
+                workingDirectory,
+                (nint)(&startupInfo),
+                (nint)pProcessInfo,
+                CorDebugCreateProcessFlags.DEBUG_NO_SPECIAL_OPTIONS,
+                out spawnedProcess);
+        }
     }
     // A debugger drives one debuggee: a second start would replace the native objects of the first
     private void EnsureNotStarted() {

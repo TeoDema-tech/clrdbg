@@ -8,10 +8,18 @@ namespace DotNet.Debugging.Adapter;
 public class AttachConfiguration : BaseConfiguration {
     public int ProcessId { get; }
     public string? ProcessName { get; private set; }
+    public string RuntimeFlavor { get; }
+    public bool IsDesktopClr => string.Equals(RuntimeFlavor, "desktopclr", StringComparison.OrdinalIgnoreCase);
 
     public AttachConfiguration(Dictionary<string, JToken> properties) : base(properties) {
         ProcessId = properties.TryGetValue("processId").ToValue<int>();
         ProcessName = properties.TryGetValue("processId").ToClass<string>();
+
+        var type = properties.TryGetValue("type").ToClass<string>();
+        var flavor = properties.TryGetValue("runtimeFlavor").ToClass<string>();
+        if (string.IsNullOrEmpty(flavor) && string.Equals(type, "clr", StringComparison.OrdinalIgnoreCase))
+            flavor = "desktopclr";
+        RuntimeFlavor = flavor ?? "coreclr";
     }
 
     public override IDebugAgent CreateDebugAgent(DebugSession debugSession) {

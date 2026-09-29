@@ -31,6 +31,8 @@
 		<Compile Remove="Roslyn\src\ExpressionEvaluator\CSharp\Source\ExpressionCompiler\CSharpInstructionDecoder.cs" />
 		<Compile Remove="Roslyn\src\ExpressionEvaluator\CSharp\Source\ExpressionCompiler\CSharpLanguageInstructionDecoder.cs" />
 		<Compile Remove="Roslyn\src\ExpressionEvaluator\CSharp\Source\ExpressionCompiler\CSharpMetadataContext.cs" />
+		<Compile Remove="Roslyn/**/obj/**" />
+		<Compile Remove="Roslyn/**/bin/**" />
 		<!-- Named by MetadataUtilities the way Roslyn's own project names it -->
 		<EmbeddedResource Include="Roslyn\src\ExpressionEvaluator\Core\Source\ExpressionCompiler\Resources\WindowsProxy.winmd" LogicalName="Microsoft.CodeAnalysis.ExpressionEvaluator.Resources.WindowsProxy.winmd" />
 	</ItemGroup>
