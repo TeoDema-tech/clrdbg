@@ -97,10 +97,6 @@ public partial class DebugSession : Session {
         if (symbolsResolver?.HasSymbolServers == true)
             OnDebugDataReceived(string.Format(Resources.MsgPdbSearching, request.SymbolFileName));
         request.SymbolFilePath = symbolsResolver?.FindSymbols(request.SymbolFileName, request.PdbGuid);
-        if (string.IsNullOrEmpty(request.SymbolFilePath) && !string.IsNullOrEmpty(request.ModulePath)) {
-            var allModulePaths = session.Modules.Select(m => m.Path).Where(p => !string.IsNullOrEmpty(p));
-            request.SymbolFilePath = decompilationService.GetOrGeneratePdb(request.ModulePath, allModulePaths);
-        }
     }
     private void AssemblyLoaded(ModuleInfo module) {
         var justMyCode = debugAgent.Configuration.JustMyCode;

@@ -22,6 +22,12 @@ internal sealed class DebuggingAssemblyResolver : IAssemblyResolver {
 
     public Task<MetadataFile?> ResolveAsync(IAssemblyReference name) => Task.FromResult(Resolve(name));
     public Task<MetadataFile?> ResolveModuleAsync(MetadataFile mainModule, string moduleName) => Task.FromResult(ResolveModule(mainModule, moduleName));
+    public IDisposable BeginSnapshot() => NullDisposable.Instance;
+
+    private sealed class NullDisposable : IDisposable {
+        public static readonly NullDisposable Instance = new();
+        public void Dispose() { }
+    }
 
     public MetadataFile? Resolve(IAssemblyReference name) {
         string? exactMatch = null;
